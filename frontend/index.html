@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Playlist → Serato</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- Header -->
+    <div class="header">
+      <h1>playlist → serato</h1>
+      <div class="header-actions">
+        <button class="icon-btn" id="btn-refresh" title="Refresh playlists">↺</button>
+        <button class="icon-btn" id="btn-settings" title="Settings">⚙</button>
+      </div>
+    </div>
+
+    <!-- Playlist field -->
+    <div class="field">
+      <label for="playlist-input">Playlist</label>
+      <div class="input-wrap">
+        <input
+          id="playlist-input"
+          class="input"
+          type="text"
+          placeholder="Loading playlists…"
+          autocomplete="off"
+          disabled
+        >
+        <div id="playlist-dropdown" class="dropdown" hidden></div>
+      </div>
+    </div>
+
+    <!-- Crate name field -->
+    <div class="field">
+      <label for="crate-input">Crate name</label>
+      <input id="crate-input" class="input" type="text" placeholder="Name for the Serato crate">
+    </div>
+
+    <!-- Create button -->
+    <button class="btn-primary" id="btn-create" disabled>Create Crate</button>
+
+    <!-- Status -->
+    <p class="status" id="status">Loading playlists…</p>
+
+    <!-- Results (hidden until crate created) -->
+    <div id="results" class="results" hidden>
+
+      <!-- Stats -->
+      <div class="stats">
+        <div class="stat matched">
+          <span class="stat-num" id="stat-matched">0</span>
+          <span class="stat-lbl">matched</span>
+        </div>
+        <div class="stat fuzzy">
+          <span class="stat-num" id="stat-fuzzy">0</span>
+          <span class="stat-lbl">fuzzy</span>
+        </div>
+        <div class="stat missing">
+          <span class="stat-num" id="stat-missing">0</span>
+          <span class="stat-lbl">missing</span>
+        </div>
+      </div>
+
+      <!-- Matched track list -->
+      <div class="track-list" id="track-list"></div>
+
+      <!-- Missing section -->
+      <div id="missing-section" class="missing-section" hidden>
+        <div class="missing-header">
+          <span class="missing-label" id="missing-label"></span>
+          <div class="toggle-btns">
+            <button class="text-btn" id="btn-select-all">All</button>
+            <button class="text-btn" id="btn-select-none">None</button>
+          </div>
+        </div>
+        <div class="missing-list" id="missing-list"></div>
+        <button class="btn-download" id="btn-download" hidden></button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div class="modal-overlay" id="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Settings</span>
+        <button class="modal-close" id="modal-close">✕</button>
+      </div>
+
+      <div class="field">
+        <label>Soulseek username</label>
+        <input id="s-username" class="input" type="text" placeholder="username">
+      </div>
+      <div class="field">
+        <label>Soulseek password</label>
+        <input id="s-password" class="input" type="password" placeholder="••••••••">
+      </div>
+      <div class="field">
+        <label>Download folder</label>
+        <div class="folder-row">
+          <input id="s-folder" class="input" type="text" readonly>
+          <button class="btn-browse" id="btn-browse">Browse…</button>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btn-save-settings">Save</button>
+      <p class="modal-status" id="modal-status"></p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

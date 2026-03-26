@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playlist → Serato — WMP2</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #060608;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255,120,0,0.06) 0%, transparent 60%);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 48px 24px 48px;
+    min-height: 100vh;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12px;
+    color: #ccc;
+  }
+
+  /* ═══════════════════════════════════════════
+     OUTER WRAPPER — gives room for tab + spine
+  ═══════════════════════════════════════════ */
+  .player {
+    position: relative;
+    width: 530px;
+  }
+
+  /* ═══════════════════════════════════════════
+     FOLDER TAB — extruded lobe, like the spine
+  ═══════════════════════════════════════════ */
+  .tab {
+    position: absolute;
+    top: 0;
+    left: 28px;
+    z-index: 4;
+
+    /* lighter at top (lit surface), matches window tone at bottom (seamless join) */
+    background: linear-gradient(180deg, #2e2416 0%, #221a10 50%, #1a1410 100%);
+    border: 1px solid #4a3820;
+    border-top-color: #5a4828; /* brightest edge — closest to light source */
+    border-bottom: none;
+    border-radius: 14px 14px 0 0;
+    padding: 10px 26px 13px;
+
+    /* shadow falls DOWN onto the window surface — key to looking raised */
+    box-shadow:
+      inset 0 1px 0 rgba(255,200,100,0.14),   /* top inner highlight */
+      inset 1px 0 0 rgba(255,255,255,0.04),
+      inset -1px 0 0 rgba(0,0,0,0.3),
+      0 4px 10px rgba(0,0,0,0.7),              /* downward cast shadow */
+      0 2px 4px rgba(0,0,0,0.5),
+      -3px 0 8px rgba(0,0,0,0.4),
+      3px 0 8px rgba(0,0,0,0.4);
+  }
+
+  /* curved shoulders where tab meets the window — like real folder tabs */
+  .tab::before,
+  .tab::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    width: 12px;
+    height: 12px;
+    background: transparent;
+  }
+
+  .tab::before {
+    left: -12px;
+    border-bottom-right-radius: 10px;
+    border-right: 1px solid #4a3820;
+    border-bottom: 1px solid #4a3820;
+    box-shadow: 3px 0 0 0 #1a1410;
+  }
+
+  .tab::after {
+    right: -12px;
+    border-bottom-left-radius: 10px;
+    border-left: 1px solid #4a3820;
+    border-bottom: 1px solid #4a3820;
+    box-shadow: -3px 0 0 0 #1a1410;
+  }
+
+  .tab-inner {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .tab-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #ffaa33, #cc6600);
+    box-shadow: 0 0 7px rgba(255,140,0,0.9), 0 0 14px rgba(255,100,0,0.4);
+    flex-shrink: 0;
+  }
+
+  .tab-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #996622;
+    text-shadow: 0 0 10px rgba(255,140,0,0.2);
+  }
+
+  /* ═══════════════════════════════════════════
+     MAIN SHELL
+     Offset down by tab height; top-left corner
+     is square where it meets the tab
+  ═══════════════════════════════════════════ */
+  .shell {
+    position: relative;
+    margin-top: 35px; /* tab overlaps shell top by a few px to hide the seam */
+
+    background: linear-gradient(160deg, #1c1814 0%, #141210 40%, #0f0d0c 100%);
+    border-radius: 12px;
+    border: 1px solid #332820;
+    border-top-color: #3a2a1a; /* slightly lighter where tab joins */
+
+    box-shadow:
+      inset 0 1px 0 rgba(255,180,80,0.07),
+      0 0 0 1px #000,
+      0 12px 50px rgba(0,0,0,0.95),
+      0 0 80px rgba(255,100,0,0.05);
+
+    overflow: visible; /* allow protrusions */
+  }
+
+
+  /* ═══════════════════════════════════════════
+     BOTTOM-LEFT CORNER FOOT
+     Small curved lobe at bottom-left
+  ═══════════════════════════════════════════ */
+  .foot {
+    position: absolute;
+    left: -14px;
+    bottom: 20px;
+    width: 18px;
+    height: 80px;
+    border-radius: 14px 0 0 14px;
+
+    background: linear-gradient(180deg, #161210 0%, #121010 100%);
+    border: 1px solid #221a14;
+    border-right: none;
+
+    box-shadow:
+      -2px 0 10px rgba(0,0,0,0.8),
+      inset 0 1px 0 rgba(255,255,255,0.02);
+    z-index: 1;
+  }
+
+  /* ═══════════════════════════════════════════
+     INNER CHROME FRAME
+     Inset bezel inside the shell
+  ═══════════════════════════════════════════ */
+  .bezel {
+    margin: 10px 10px 10px 10px;
+    border-radius: 0 8px 10px 8px;
+    background: linear-gradient(160deg, #0e0c0a 0%, #0a0908 100%);
+    border: 1px solid #1e1814;
+    box-shadow:
+      inset 0 2px 8px rgba(0,0,0,0.9),
+      inset 0 0 0 1px rgba(255,255,255,0.015);
+    overflow: hidden;
+  }
+
+
+  /* ═══════════════════════════════════════════
+     CONTENT AREA
+  ═══════════════════════════════════════════ */
+  .content {
+    padding: 14px 14px 16px;
+  }
+
+  /* ── Field label ── */
+  .field-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 7.5px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #4a3820;
+    margin-bottom: 5px;
+    display: block;
+  }
+
+  /* ── Input ── */
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .input {
+    flex: 1;
+    background: #060504;
+    border: 1px solid #1c1610;
+    border-radius: 3px;
+    color: #cc8833;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12.5px;
+    padding: 7px 10px;
+    outline: none;
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.9), inset 0 0 0 1px rgba(255,255,255,0.01);
+    transition: all 0.2s;
+  }
+  .input:focus {
+    border-color: #3a2810;
+    color: #ff9933;
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.9), 0 0 0 2px rgba(255,140,0,0.08);
+  }
+  .input::placeholder { color: #2a2018; }
+
+  .icon-btn {
+    background: linear-gradient(180deg, #1e1a14 0%, #141210 100%);
+    border: 1px solid #2a2018;
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    color: #4a3820;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04), inset 0 1px 3px rgba(0,0,0,0.8);
+    transition: all 0.2s;
+  }
+  .icon-btn:hover {
+    border-color: #4a3018;
+    color: #ff8c00;
+    box-shadow: 0 0 8px rgba(255,140,0,0.2), inset 0 1px 3px rgba(0,0,0,0.8);
+  }
+
+  /* ── Create button ── */
+  .btn-create {
+    width: 100%;
+    background: linear-gradient(180deg, #221a0a 0%, #1a1208 50%, #140e06 100%);
+    border: 1px solid #3a2a10;
+    border-top-color: #4a3818;
+    border-radius: 4px;
+    color: #ff8c00;
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding: 11px;
+    cursor: pointer;
+    margin: 4px 0 12px;
+    transition: all 0.2s;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.03),
+      inset 0 1px 0 rgba(255,180,80,0.08),
+      0 0 20px rgba(255,100,0,0.08);
+    text-shadow: 0 0 12px rgba(255,140,0,0.5);
+  }
+  .btn-create:hover {
+    background: linear-gradient(180deg, #2e2210 0%, #221a0c 50%, #1a1208 100%);
+    border-color: #5a3e18;
+    box-shadow: 0 0 30px rgba(255,120,0,0.18), inset 0 1px 0 rgba(255,180,80,0.1);
+    color: #ffaa33;
+  }
+
+  /* ── LED stats ── */
+  .led-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .led-cell {
+    background: #040303;
+    border-radius: 3px;
+    border: 1px solid #161210;
+    padding: 8px 6px 6px;
+    text-align: center;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.95);
+  }
+
+  .led-num {
+    font-family: 'Orbitron', monospace;
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1;
+    display: block;
+  }
+  .led-lbl {
+    font-family: 'Orbitron', monospace;
+    font-size: 6.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-top: 4px;
+    display: block;
+  }
+
+  .led-cell.matched .led-num { color: #39ff14; text-shadow: 0 0 10px rgba(57,255,20,0.55); }
+  .led-cell.matched .led-lbl { color: rgba(57,255,20,0.3); }
+  .led-cell.fuzzy   .led-num { color: #00ccff; text-shadow: 0 0 10px rgba(0,200,255,0.45); }
+  .led-cell.fuzzy   .led-lbl { color: rgba(0,200,255,0.3); }
+  .led-cell.missing .led-num { color: #ff8c00; text-shadow: 0 0 10px rgba(255,140,0,0.5); }
+  .led-cell.missing .led-lbl { color: rgba(255,140,0,0.3); }
+
+  /* ── Divider ── */
+  .rule {
+    border: none;
+    border-top: 1px solid #161210;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.02);
+    margin: 10px 0;
+  }
+
+  /* ── Section header ── */
+  .section-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .section-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 7.5px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #3a2a14;
+  }
+  .section-title.warn { color: #804010; }
+
+  .sel-btns { display: flex; gap: 4px; }
+  .sel-btn {
+    background: #0e0c08;
+    border: 1px solid #1e1810;
+    color: #3a2a14;
+    font-family: 'Orbitron', monospace;
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 7px;
+    border-radius: 2px;
+    cursor: pointer;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
+    transition: all 0.15s;
+  }
+  .sel-btn:hover { border-color: #5a3810; color: #ff8c00; }
+
+  /* ── Track list ── */
+  .track-list {
+    background: #030302;
+    border: 1px solid #141210;
+    border-radius: 3px;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.95);
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+
+  .track {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.02);
+    transition: background 0.1s;
+  }
+  .track:last-child { border-bottom: none; }
+  .track:hover { background: rgba(255,140,0,0.03); }
+
+  .track-pip {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .track-pip.exact { background: #39ff14; box-shadow: 0 0 6px rgba(57,255,20,0.6); }
+  .track-pip.fuzzy { background: #00ccff; box-shadow: 0 0 6px rgba(0,200,255,0.5); }
+
+  .track-name {
+    flex: 1;
+    font-size: 12px;
+    color: #888;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .track-name em { font-style: normal; color: #bbb; }
+
+  .track-badge {
+    font-family: 'Orbitron', monospace;
+    font-size: 6.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 5px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .track-badge.exact { color: #39ff14; background: rgba(57,255,20,0.07); }
+  .track-badge.fuzzy { color: #00ccff; background: rgba(0,200,255,0.07); }
+
+  /* ── Missing list ── */
+  .missing-list {
+    background: #030302;
+    border: 1px solid #1e1610;
+    border-radius: 3px;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.95);
+    max-height: 148px;
+    overflow-y: auto;
+  }
+
+  .missing-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.02);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .missing-item:last-child { border-bottom: none; }
+  .missing-item:hover { background: rgba(255,140,0,0.04); }
+  .missing-item.selected { background: rgba(255,140,0,0.03); }
+
+  .check-led {
+    width: 14px;
+    height: 14px;
+    border: 1px solid #1e1610;
+    border-radius: 2px;
+    background: #070504;
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.9);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 700;
+    transition: all 0.15s;
+  }
+  .selected .check-led {
+    color: #ff8c00;
+    border-color: #3a2000;
+    background: #100800;
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.9), 0 0 5px rgba(255,140,0,0.25);
+  }
+
+  .missing-name { font-size: 12px; color: #777; }
+  .missing-name em { font-style: normal; color: #aaa; }
+
+  /* ── Download button ── */
+  .btn-download {
+    width: 100%;
+    background: linear-gradient(180deg, #160e04 0%, #100c04 100%);
+    border: 1px solid #2a1e0c;
+    border-radius: 3px;
+    color: #5a3c18;
+    font-family: 'Orbitron', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 10px;
+    cursor: pointer;
+    margin-top: 7px;
+    transition: all 0.2s;
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.8);
+  }
+  .btn-download:hover {
+    border-color: #4a2e10;
+    color: #cc6600;
+    box-shadow: 0 0 16px rgba(255,120,0,0.12), inset 0 1px 4px rgba(0,0,0,0.8);
+    text-shadow: 0 0 8px rgba(255,140,0,0.4);
+  }
+
+  /* ═══════════════════════════════════════════
+     STATUS BAR
+  ═══════════════════════════════════════════ */
+  .statusbar {
+    background: linear-gradient(180deg, #0e0c08 0%, #080604 100%);
+    border-top: 1px solid #141008;
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .status-text {
+    font-family: 'Orbitron', monospace;
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #2a2010;
+  }
+  .status-text .ok { color: rgba(57,255,20,0.4); }
+
+  .status-leds {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+
+  .s-led {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #0e0c08;
+    border: 1px solid #1a1610;
+  }
+  .s-led.on-g { background: #39ff14; box-shadow: 0 0 5px rgba(57,255,20,0.7); border-color: #39ff14; }
+  .s-led.on-o { background: #ff8c00; box-shadow: 0 0 5px rgba(255,140,0,0.7); border-color: #ff8c00; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #040302; }
+  ::-webkit-scrollbar-thumb { background: #1a1410; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="player">
+
+  <!-- Folder tab -->
+  <div class="tab">
+    <div class="tab-inner">
+      <div class="tab-dot"></div>
+      <span class="tab-label">Playlist to Serato</span>
+    </div>
+  </div>
+
+  <!-- Main shell -->
+  <div class="shell">
+
+    <!-- Left foot protrusion -->
+    <div class="foot"></div>
+
+    <!-- Inset bezel -->
+    <div class="bezel">
+
+
+      <!-- Content -->
+      <div class="content">
+
+        <!-- Playlist -->
+        <span class="field-label">Playlist</span>
+        <div class="input-row">
+          <input class="input" type="text" value="🦋 butterfly">
+          <button class="icon-btn">↺</button>
+        </div>
+
+        <!-- Crate name -->
+        <span class="field-label">Crate name</span>
+        <div class="input-row">
+          <input class="input" type="text" value="🦋 butterfly">
+          <button class="icon-btn">⚙</button>
+        </div>
+
+        <button class="btn-create">▶ &nbsp; Create Crate</button>
+
+        <!-- LED stats -->
+        <div class="led-strip">
+          <div class="led-cell matched">
+            <span class="led-num">24</span>
+            <span class="led-lbl">Matched</span>
+          </div>
+          <div class="led-cell fuzzy">
+            <span class="led-num">02</span>
+            <span class="led-lbl">Fuzzy</span>
+          </div>
+          <div class="led-cell missing">
+            <span class="led-num">08</span>
+            <span class="led-lbl">Missing</span>
+          </div>
+        </div>
+
+        <hr class="rule">
+
+        <!-- Matched tracks -->
+        <div class="section-hdr">
+          <span class="section-title">In Serato Library</span>
+        </div>
+        <div class="track-list">
+          <div class="track">
+            <div class="track-pip exact"></div>
+            <div class="track-name"><em>Rose Rouge</em> — Jorja Smith</div>
+            <span class="track-badge exact">Exact</span>
+          </div>
+          <div class="track">
+            <div class="track-pip exact"></div>
+            <div class="track-name"><em>God's Plan</em> — Drake</div>
+            <span class="track-badge exact">Exact</span>
+          </div>
+          <div class="track">
+            <div class="track-pip exact"></div>
+            <div class="track-name"><em>HUMBLE.</em> — Kendrick Lamar</div>
+            <span class="track-badge exact">Exact</span>
+          </div>
+          <div class="track">
+            <div class="track-pip fuzzy"></div>
+            <div class="track-name"><em>Kill Bill</em> — SZA</div>
+            <span class="track-badge fuzzy">Fuzzy</span>
+          </div>
+          <div class="track">
+            <div class="track-pip fuzzy"></div>
+            <div class="track-name"><em>Pink + White</em> — Frank Ocean</div>
+            <span class="track-badge fuzzy">Fuzzy</span>
+          </div>
+        </div>
+
+        <hr class="rule">
+
+        <!-- Missing -->
+        <div class="section-hdr">
+          <span class="section-title warn">✗ &nbsp; Not in Serato (8)</span>
+          <div class="sel-btns">
+            <button class="sel-btn">All</button>
+            <button class="sel-btn">None</button>
+          </div>
+        </div>
+        <div class="missing-list">
+          <div class="missing-item selected">
+            <div class="check-led">✓</div>
+            <div class="missing-name"><em>After Hours</em> — The Weeknd</div>
+          </div>
+          <div class="missing-item selected">
+            <div class="check-led">✓</div>
+            <div class="missing-name"><em>No Ordinary Love</em> — Sade</div>
+          </div>
+          <div class="missing-item selected">
+            <div class="check-led">✓</div>
+            <div class="missing-name"><em>Untitled (How Does It Feel)</em> — D'Angelo</div>
+          </div>
+          <div class="missing-item">
+            <div class="check-led"></div>
+            <div class="missing-name"><em>Tyrone</em> — Erykah Badu</div>
+          </div>
+          <div class="missing-item selected">
+            <div class="check-led">✓</div>
+            <div class="missing-name"><em>Are You That Somebody</em> — Aaliyah</div>
+          </div>
+        </div>
+
+        <button class="btn-download">⬇ &nbsp; Download 4 of 8 missing via Soulseek</button>
+
+      </div><!-- /content -->
+
+    </div><!-- /bezel -->
+
+    <!-- Status bar -->
+    <div class="statusbar">
+      <span class="status-text"><span class="ok">✓ &nbsp;"🦋 butterfly" ready</span> &nbsp;— 26 tracks</span>
+      <div class="status-leds">
+        <div class="s-led on-g"></div>
+        <div class="s-led on-o"></div>
+        <div class="s-led"></div>
+      </div>
+    </div>
+
+  </div><!-- /shell -->
+</div><!-- /player -->
+</body>
+</html>
