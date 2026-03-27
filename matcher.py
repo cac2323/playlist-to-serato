@@ -118,7 +118,7 @@ if __name__ == "__main__":
     idx = int(input("\nEnter number to test: "))
     playlist_name = playlists[idx]
 
-    print(f"\nLoading Serato database...")
+    print("\nLoading Serato database...")
     serato_tracks = parse_database()
     serato_index = build_serato_index(serato_tracks)
     print(f"Indexed {len(serato_index)} Serato tracks")
@@ -129,17 +129,17 @@ if __name__ == "__main__":
 
     matched, unmatched = match_tracks(playlist_tracks, serato_index)
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Matched   : {len(matched)}")
     print(f"  Unmatched : {len(unmatched)}")
 
     if matched:
-        print(f"\nMatched tracks (first 5):")
+        print("\nMatched tracks (first 5):")
         for t in matched[:5]:
             print(f"  {t['artist']} — {t['title']}")
             print(f"    → {t['path']}")
 
     if unmatched:
-        print(f"\nNot found in Serato:")
+        print("\nNot found in Serato:")
         for t in unmatched:
             print(f"  {t['artist']} — {t['title']}")
