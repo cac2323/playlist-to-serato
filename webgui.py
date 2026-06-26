@@ -6,12 +6,13 @@ from pathlib import Path
 
 import webview
 
-from apple_music import get_playlists, get_playlist_tracks
+import apple_music
+import spotify as spotify_mod
 from serato_db import parse_database
 from matcher import build_serato_index, build_serato_title_index, match_tracks
 from serato_crate import write_crate, crate_exists, get_date_crate_name, audio_paths_in_dir
 from downloader import (
-    check_sldl_installed, download_track, get_download_dir,
+    check_sldl_installed, download_track, test_connection, get_download_dir,
     get_credentials, save_credentials, get_base_dir, save_config,
 )
 
@@ -25,12 +26,15 @@ class Api:
         self._unmatched = []
         self._playlist_tracks = []
         self._crate_name = ''
+        self._cancel_flag = threading.Event()
 
     # ── Playlists ──────────────────────────────────────────────────────────
 
-    def get_playlists(self):
+    def get_playlists(self, source='apple_music'):
         try:
-            return get_playlists()
+            if source == 'spotify':
+                return spotify_mod.get_playlists()  # [{'id': ..., 'name': ...}, ...]
+            return apple_music.get_playlists()
         except Exception as e:
             return {'error': str(e)}
 
@@ -47,10 +51,15 @@ class Api:
     def check_crate_exists(self, crate_name):
         return crate_exists(crate_name)
 
-    def create_crate(self, playlist, crate_name):
+    def create_crate(self, playlist, crate_name, source='apple_music', playlist_id=None):
         try:
             self._ensure_index()
-            playlist_tracks = get_playlist_tracks(playlist)
+
+            if source == 'spotify':
+                playlist_tracks = spotify_mod.get_playlist_tracks(playlist_id)
+            else:
+                playlist_tracks = apple_music.get_playlist_tracks(playlist)
+
             matched, unmatched = match_tracks(
                 playlist_tracks, self._serato_index, self._serato_title_index
             )
@@ -93,6 +102,8 @@ class Api:
         matched = list(self._matched)
         playlist_tracks = list(self._playlist_tracks)
 
+        self._cancel_flag.clear()
+
         def work():
             track_to_path = {(t['artist'], t['title']): t['path'] for t in matched}
             ok_count = 0
@@ -102,18 +113,33 @@ class Api:
 
             def download_one(entry):
                 local_i, track = entry
+                if self._cancel_flag.is_set():
+                    return local_i, track, 'cancelled', None
                 artist, title = track['artist'], track['title']
                 self._js('_onDownloadStart', {'i': local_i, 'artist': artist, 'title': title})
-                status, file_path = download_track(artist, title, username, password)
+                status, file_path = download_track(
+                    artist, title, username, password,
+                    on_log=lambda msg: self._js('_onDownloadLog', {'msg': msg}),
+                )
                 return local_i, track, status, file_path
 
-            with ThreadPoolExecutor(max_workers=3) as executor:
+            login_failed = False
+            cancelled = False
+            with ThreadPoolExecutor(max_workers=1) as executor:
                 futures = {
                     executor.submit(download_one, (i, t)): t
                     for i, t in enumerate(tracks)
                 }
                 for future in as_completed(futures):
                     i, track, status, file_path = future.result()
+                    if status == 'login_error':
+                        login_failed = True
+                        self._cancel_flag.set()
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        break
+                    if status == 'cancelled' or self._cancel_flag.is_set():
+                        cancelled = True
+                        continue
                     with lock:
                         if file_path:
                             track_to_path[(track['artist'], track['title'])] = str(file_path)[1:]
@@ -127,7 +153,21 @@ class Api:
                         'status': status, 'done': done, 'total': total,
                     })
 
-            # Rebuild playlist crate in Apple Music order
+            if login_failed:
+                self._js('_onDownloadsComplete', {
+                    'ok': ok_count, 'fail': fail_count,
+                    'errors': ['Login failed — check your Soulseek credentials in Settings'],
+                })
+                return
+
+            if cancelled:
+                self._js('_onDownloadsComplete', {
+                    'ok': ok_count, 'fail': fail_count,
+                    'errors': ['cancelled'],
+                })
+                return
+
+            # Rebuild playlist crate in original order
             crate_errors = []
             if crate_name and playlist_tracks:
                 ordered = [
@@ -165,6 +205,7 @@ class Api:
             'username': username or '',
             'has_password': bool(password),
             'base_dir': str(get_base_dir()),
+            'spotify_connected': spotify_mod.is_authenticated(),
         }
 
     def save_settings(self, username, password, folder):
@@ -173,6 +214,33 @@ class Api:
                 save_credentials(username, password)
             if folder:
                 save_config({'download_base_dir': folder})
+            return {'ok': True}
+        except Exception as e:
+            return {'error': str(e)}
+
+    def cancel_downloads(self):
+        self._cancel_flag.set()
+        return {'ok': True}
+
+    def test_connection(self):
+        username, password = get_credentials()
+        if not username or not password:
+            return {'error': 'no_credentials'}
+        if not check_sldl_installed():
+            return {'error': 'no_sldl'}
+        status = test_connection(username, password)
+        return {'status': status}
+
+    def connect_spotify(self):
+        try:
+            spotify_mod.connect()
+            return {'ok': True}
+        except Exception as e:
+            return {'error': str(e)}
+
+    def disconnect_spotify(self):
+        try:
+            spotify_mod.disconnect()
             return {'ok': True}
         except Exception as e:
             return {'error': str(e)}

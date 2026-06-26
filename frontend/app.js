@@ -5,42 +5,55 @@
 
 // ── State ────────────────────────────────────────────────────
 const state = {
+  source: 'apple_music',   // 'apple_music' | 'spotify'
   playlists: [],
-  unmatched: [],       // [{artist, title}, ...] — parallel to missing-list items
+  playlistIds: {},         // name → id (Spotify only)
+  unmatched: [],           // [{artist, title}, ...] — parallel to missing-list items
   selectedIndices: new Set(),
   downloading: false,
+  notFoundTracks: [],      // tracks searched but not on Soulseek
+  errorTracks: [],         // tracks that failed due to connection/timeout
 };
 
 // ── DOM refs ─────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const playlistInput  = $('playlist-input');
-const playlistDrop   = $('playlist-dropdown');
-const crateInput     = $('crate-input');
-const btnCreate      = $('btn-create');
-const btnRefresh     = $('btn-refresh');
-const btnSettings    = $('btn-settings');
-const statusEl       = $('status');
-const resultsEl      = $('results');
-const trackListEl    = $('track-list');
-const statMatched    = $('stat-matched');
-const statFuzzy      = $('stat-fuzzy');
-const statMissing    = $('stat-missing');
-const missingSec     = $('missing-section');
-const missingLabel   = $('missing-label');
-const missingListEl  = $('missing-list');
-const btnDownload    = $('btn-download');
-const btnSelectAll   = $('btn-select-all');
-const btnSelectNone  = $('btn-select-none');
+const playlistInput    = $('playlist-input');
+const playlistDrop     = $('playlist-dropdown');
+const crateInput       = $('crate-input');
+const btnCreate        = $('btn-create');
+const btnRefresh       = $('btn-refresh');
+const btnSettings      = $('btn-settings');
+const statusEl         = $('status');
+const resultsEl        = $('results');
+const trackListEl      = $('track-list');
+const statMatched      = $('stat-matched');
+const statFuzzy        = $('stat-fuzzy');
+const statMissing      = $('stat-missing');
+const missingSec       = $('missing-section');
+const missingLabel     = $('missing-label');
+const missingListEl    = $('missing-list');
+const btnDownload      = $('btn-download');
+const btnCancel        = $('btn-cancel');
+const downloadLogEl    = $('download-log');
+const btnSelectAll     = $('btn-select-all');
+const btnSelectNone    = $('btn-select-none');
+const btnSourceApple   = $('btn-source-apple');
+const btnSourceSpotify = $('btn-source-spotify');
 
 // Settings modal
-const modalOverlay   = $('modal-overlay');
-const modalClose     = $('modal-close');
-const sUsername      = $('s-username');
-const sPassword      = $('s-password');
-const sFolder        = $('s-folder');
-const btnBrowse      = $('btn-browse');
-const btnSave        = $('btn-save-settings');
-const modalStatus    = $('modal-status');
+const modalOverlay       = $('modal-overlay');
+const modalClose         = $('modal-close');
+const sUsername          = $('s-username');
+const sPassword          = $('s-password');
+const sFolder            = $('s-folder');
+const btnBrowse          = $('btn-browse');
+const btnSave            = $('btn-save-settings');
+const modalStatus        = $('modal-status');
+const btnSpotifyConnect  = $('btn-spotify-connect');
+const btnSpotifyDisconn  = $('btn-spotify-disconnect');
+const spotifyStatusEl    = $('spotify-status');
+const btnTestConn        = $('btn-test-conn');
+const testConnStatusEl   = $('test-conn-status');
 
 // ── Boot ─────────────────────────────────────────────────────
 window.addEventListener('pywebviewready', () => {
@@ -55,18 +68,57 @@ function loadPlaylists() {
   playlistInput.disabled = true;
   btnCreate.disabled = true;
 
-  window.pywebview.api.get_playlists().then(result => {
+  window.pywebview.api.get_playlists(state.source).then(result => {
     if (result && result.error) {
-      setStatus('Error loading playlists: ' + result.error, 'error');
+      if (result.error === 'no_spotify_client_id') {
+        setStatus('Enter your Spotify Client ID in ⚙ Settings to connect.');
+      } else {
+        setStatus('Error loading playlists: ' + result.error, 'error');
+      }
       return;
     }
-    state.playlists = result || [];
+
+    if (state.source === 'spotify') {
+      // result is [{id, name}, ...]
+      state.playlistIds = {};
+      state.playlists = (result || []).map(p => {
+        state.playlistIds[p.name] = p.id;
+        return p.name;
+      });
+    } else {
+      state.playlists = result || [];
+      state.playlistIds = {};
+    }
+
     playlistInput.disabled = false;
     playlistInput.placeholder = 'Search playlists…';
     btnCreate.disabled = false;
     setStatus('Select a playlist to get started.');
   });
 }
+
+// ── Source toggle ─────────────────────────────────────────────
+btnSourceApple.addEventListener('click', () => {
+  if (state.source === 'apple_music') return;
+  state.source = 'apple_music';
+  btnSourceApple.classList.add('active');
+  btnSourceSpotify.classList.remove('active');
+  playlistInput.value = '';
+  crateInput.value = '';
+  resultsEl.hidden = true;
+  loadPlaylists();
+});
+
+btnSourceSpotify.addEventListener('click', () => {
+  if (state.source === 'spotify') return;
+  state.source = 'spotify';
+  btnSourceSpotify.classList.add('active');
+  btnSourceApple.classList.remove('active');
+  playlistInput.value = '';
+  crateInput.value = '';
+  resultsEl.hidden = true;
+  loadPlaylists();
+});
 
 // ── Playlist search dropdown ──────────────────────────────────
 playlistInput.addEventListener('input', () => {
@@ -163,7 +215,8 @@ btnCreate.addEventListener('click', async () => {
   resultsEl.hidden = true;
   setStatus('Loading Serato library…');
 
-  const result = await window.pywebview.api.create_crate(playlist, crate);
+  const playlistId = state.playlistIds[playlist] || null;
+  const result = await window.pywebview.api.create_crate(playlist, crate, state.source, playlistId);
 
   btnCreate.disabled = false;
 
@@ -295,9 +348,7 @@ btnDownload.addEventListener('click', async () => {
   const result = await window.pywebview.api.start_downloads(indices);
 
   if (result.error === 'no_credentials') {
-    openSettings(() => {
-      // retry after saving credentials
-    });
+    openSettings(() => {});
     return;
   }
   if (result.error === 'no_sldl') {
@@ -310,8 +361,13 @@ btnDownload.addEventListener('click', async () => {
   }
 
   state.downloading = true;
-  btnDownload.disabled = true;
+  state.notFoundTracks = [];
+  state.errorTracks = [];
+  btnDownload.hidden = true;
+  btnCancel.hidden = false;
   btnCreate.disabled = true;
+  downloadLogEl.innerHTML = '';
+  downloadLogEl.hidden = false;
   setStatus(`Downloading 0 / ${indices.length}…`);
 
   // Mark selected items as pending
@@ -319,6 +375,12 @@ btnDownload.addEventListener('click', async () => {
     const item = missingListEl.querySelector(`[data-index="${i}"]`);
     if (item) item.classList.add('dl-pending');
   });
+});
+
+btnCancel.addEventListener('click', async () => {
+  btnCancel.disabled = true;
+  btnCancel.textContent = 'Cancelling…';
+  await window.pywebview.api.cancel_downloads();
 });
 
 // ── Download progress callbacks (called from Python) ──────────
@@ -335,24 +397,92 @@ window._onDownloadUpdate = function({ i, artist, title, status, done, total }) {
   const item = missingListEl.querySelector(`[data-index="${i}"]`);
   if (item) {
     item.classList.remove('dl-active', 'dl-pending');
-    item.classList.add(status === 'ok' ? 'dl-ok' : 'dl-fail');
-    item.querySelector('.dl-status-icon').textContent = status === 'ok' ? '✓' : '✗';
+    if (status === 'ok') {
+      item.classList.add('dl-ok');
+      item.querySelector('.dl-status-icon').textContent = '✓';
+    } else if (status === 'not_found') {
+      item.classList.add('dl-not-found');
+      item.querySelector('.dl-status-icon').textContent = '✗';
+      state.notFoundTracks.push(`${artist} — ${title}`);
+    } else {
+      item.classList.add('dl-fail');
+      item.querySelector('.dl-status-icon').textContent = '!';
+      state.errorTracks.push(`${artist} — ${title}`);
+    }
   }
   setStatus(done < total ? `Downloading ${done} / ${total}…` : 'Finishing up…');
 };
 
+window._onDownloadLog = function({ msg }) {
+  const line = document.createElement('div');
+  const isError = /fail|error|could not|login/i.test(msg);
+  if (isError) line.className = 'log-error';
+  line.textContent = msg;
+  downloadLogEl.appendChild(line);
+  downloadLogEl.scrollTop = downloadLogEl.scrollHeight;
+};
+
 window._onDownloadsComplete = function({ ok, fail, errors }) {
   state.downloading = false;
+  btnCancel.hidden = true;
+  btnCancel.disabled = false;
+  btnCancel.textContent = 'Cancel';
+  btnDownload.hidden = false;
   btnDownload.disabled = false;
   btnCreate.disabled = false;
 
-  let msg = `Done — ${ok} downloaded`;
-  if (fail > 0) msg += `, ${fail} not found`;
-  if (ok > 0)   msg += '. Reopen Serato to see changes.';
-  setStatus(msg, ok > 0 ? 'ok' : '');
+  const loginErr = errors.find(e => e.toLowerCase().includes('login failed'));
+  const wasCancelled = errors.includes('cancelled');
+  if (loginErr) {
+    setStatus(loginErr, 'error');
+  } else if (wasCancelled) {
+    setStatus(ok > 0 ? `Cancelled — ${ok} downloaded before stop.` : 'Downloads cancelled.', ok > 0 ? 'ok' : '');
+  } else {
+    let msg = `Done — ${ok} downloaded`;
+    if (fail > 0) msg += `, ${fail} not found`;
+    if (ok > 0)   msg += '. Reopen Serato to see changes.';
+    setStatus(msg, ok > 0 ? 'ok' : '');
+  }
 
-  if (errors.length) {
-    console.error('Crate errors:', errors);
+  // Append not-found / error summary to the log panel
+  if (state.notFoundTracks.length || state.errorTracks.length) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'border-top:1px solid #222;margin:6px 0';
+    downloadLogEl.appendChild(sep);
+
+    if (state.notFoundTracks.length) {
+      const hdr = document.createElement('div');
+      hdr.style.color = '#666';
+      hdr.textContent = `Not found on Soulseek (${state.notFoundTracks.length}):`;
+      downloadLogEl.appendChild(hdr);
+      state.notFoundTracks.forEach(t => {
+        const el = document.createElement('div');
+        el.style.paddingLeft = '8px';
+        el.textContent = t;
+        downloadLogEl.appendChild(el);
+      });
+    }
+
+    if (state.errorTracks.length) {
+      const hdr = document.createElement('div');
+      hdr.className = 'log-error';
+      hdr.textContent = `Errors (${state.errorTracks.length}):`;
+      downloadLogEl.appendChild(hdr);
+      state.errorTracks.forEach(t => {
+        const el = document.createElement('div');
+        el.className = 'log-error';
+        el.style.paddingLeft = '8px';
+        el.textContent = t;
+        downloadLogEl.appendChild(el);
+      });
+    }
+
+    downloadLogEl.scrollTop = downloadLogEl.scrollHeight;
+  }
+
+  const nonLoginErrors = errors.filter(e => !e.toLowerCase().includes('login failed') && e !== 'cancelled');
+  if (nonLoginErrors.length) {
+    console.error('Crate errors:', nonLoginErrors);
   }
 
   // Update download button label
@@ -366,6 +496,7 @@ function openSettings(onSaveCallback) {
     sPassword.value = '';
     sPassword.placeholder = s.has_password ? '(saved)' : 'password';
     sFolder.value   = s.base_dir || '';
+    updateSpotifyStatus(s.spotify_connected);
   });
   modalStatus.textContent = '';
   modalStatus.className = 'modal-status';
@@ -374,6 +505,16 @@ function openSettings(onSaveCallback) {
 
   // store callback for after save
   btnSave._callback = onSaveCallback || null;
+}
+
+function updateSpotifyStatus(connected) {
+  if (connected) {
+    spotifyStatusEl.textContent = '● connected';
+    spotifyStatusEl.className = 'spotify-status ok';
+  } else {
+    spotifyStatusEl.textContent = '● not connected';
+    spotifyStatusEl.className = 'spotify-status';
+  }
 }
 
 btnSettings.addEventListener('click', () => openSettings());
@@ -391,7 +532,6 @@ btnSave.addEventListener('click', async () => {
   const u = sUsername.value.trim();
   const p = sPassword.value.trim();
   const f = sFolder.value.trim();
-
   if (!u) {
     modalStatus.textContent = 'Username is required.';
     modalStatus.className = 'modal-status error';
@@ -411,6 +551,49 @@ btnSave.addEventListener('click', async () => {
     modalOverlay.hidden = true;
     if (btnSave._callback) btnSave._callback();
   }, 600);
+});
+
+btnTestConn.addEventListener('click', async () => {
+  testConnStatusEl.textContent = 'Testing…';
+  testConnStatusEl.className = 'test-conn-status';
+  btnTestConn.disabled = true;
+  const result = await window.pywebview.api.test_connection();
+  btnTestConn.disabled = false;
+  if (result.error === 'no_credentials') {
+    testConnStatusEl.textContent = '✗ No credentials saved';
+    testConnStatusEl.className = 'test-conn-status error';
+  } else if (result.error === 'no_sldl') {
+    testConnStatusEl.textContent = '✗ sldl not installed';
+    testConnStatusEl.className = 'test-conn-status error';
+  } else if (result.status === 'login_error') {
+    testConnStatusEl.textContent = '✗ Login failed — check credentials';
+    testConnStatusEl.className = 'test-conn-status error';
+  } else if (result.status === 'failed') {
+    testConnStatusEl.textContent = '✗ Could not connect';
+    testConnStatusEl.className = 'test-conn-status error';
+  } else {
+    testConnStatusEl.textContent = '● Connected';
+    testConnStatusEl.className = 'test-conn-status ok';
+  }
+});
+
+btnSpotifyConnect.addEventListener('click', async () => {
+  spotifyStatusEl.textContent = 'Opening browser…';
+  spotifyStatusEl.className = 'spotify-status';
+  const result = await window.pywebview.api.connect_spotify();
+  if (result.error) {
+    spotifyStatusEl.textContent = 'Error: ' + result.error;
+    spotifyStatusEl.className = 'spotify-status error';
+  } else {
+    updateSpotifyStatus(true);
+  }
+});
+
+btnSpotifyDisconn.addEventListener('click', async () => {
+  await window.pywebview.api.disconnect_spotify();
+  updateSpotifyStatus(false);
+  // If currently on Spotify source, reload playlists
+  if (state.source === 'spotify') loadPlaylists();
 });
 
 // ── Helpers ───────────────────────────────────────────────────

@@ -1,11 +1,19 @@
 import datetime
 import json
+import socket
 import subprocess
+import time
 from pathlib import Path
 
 import keyring
 
 _KEYRING_SERVICE = "playlist-to-serato"
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(('', 0))
+        return s.getsockname()[1]
 
 CONFIG_PATH = Path.home() / ".playlist-to-serato.json"
 
@@ -69,6 +77,18 @@ def save_credentials(username: str, password: str):
 # sldl integration
 # ------------------------------------------------------------------
 
+_LOGIN_ERROR_PATTERNS = (
+    "login failed",
+    "failed to login",
+    "unable to connect",
+    "connection refused",
+    "invalid username",
+    "incorrect password",
+    "wrong password",
+    "not connected",
+)
+
+
 def check_sldl_installed() -> bool:
     """Return True if sldl is available on PATH."""
     try:
@@ -82,12 +102,61 @@ def check_sldl_installed() -> bool:
         return False
 
 
+def test_connection(username: str, password: str) -> str:
+    """
+    Attempt to log into Soulseek via sldl without downloading anything.
+    Returns 'ok', 'login_error', or 'failed'.
+    """
+    cmd = [
+        "sldl", "connection_test_ping_xyzzy",
+        "--user", username,
+        "--pass", password,
+        "--search-timeout", "5000",
+        "--listen-port", str(_free_port()),
+        "--no-progress",
+    ]
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        got_past_login = False
+        try:
+            for line in process.stdout:
+                line_lower = line.lower()
+                print(line.rstrip(), flush=True)
+                if any(p in line_lower for p in _LOGIN_ERROR_PATTERNS):
+                    process.kill()
+                    return "login_error"
+                # "Searching" means we successfully logged in
+                if "searching" in line_lower or "no files found" in line_lower or "no results" in line_lower:
+                    got_past_login = True
+                    process.kill()
+                    break
+        except Exception:
+            pass
+        try:
+            process.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        # If no login error lines were seen, treat as ok
+        return "ok"
+    except FileNotFoundError:
+        return "failed"
+
+
+_LOG_KEYWORDS = ("login", "searching", "failed", "succeeded", "could not", "error", "connect")
+
+
 def download_track(
     artist: str,
     title: str,
     username: str,
     password: str,
     target_dir: "Path | None" = None,
+    on_log=None,
 ) -> "tuple[str, Path | None]":
     """
     Download a single track from Soulseek using sldl.
@@ -116,8 +185,12 @@ def download_track(
         "--user", username,
         "--pass", password,
         "--path", str(target_dir),
+        "--format", "flac,mp3,m4a,aiff,wav,ogg,opus",
         "--pref-format", "flac,mp3",
         "--fast-search",
+        "--remove-ft",
+        "--search-timeout", "15000",
+        "--listen-port", str(_free_port()),
         "--no-progress",
     ]
 
@@ -139,6 +212,9 @@ def download_track(
             if not line:
                 continue
             output_lines.append(line)
+            print(line, flush=True)
+            if on_log and any(kw in line.lower() for kw in _LOG_KEYWORDS):
+                on_log(f"[{artist} — {title}] {line}")
             if line.startswith("Succeeded"):
                 succeeded = True
 
@@ -147,7 +223,7 @@ def download_track(
         # Move downloaded audio file(s) to the final download_dir
         audio_exts = {".mp3", ".flac", ".aiff", ".aif", ".wav", ".m4a", ".ogg", ".opus"}
         moved_path = None
-        for f in sorted(target_dir.iterdir()):
+        for f in sorted(target_dir.rglob('*')):
             if f.is_file() and f.suffix.lower() in audio_exts:
                 dest = download_dir / f.name
                 shutil.move(str(f), str(dest))
@@ -157,11 +233,17 @@ def download_track(
         # Clean up temp dir
         shutil.rmtree(target_dir, ignore_errors=True)
 
+        full_output = "\n".join(output_lines).lower()
+
+        if any(p in full_output for p in _LOGIN_ERROR_PATTERNS):
+            return "login_error", None
+
         if succeeded or (process.returncode == 0 and moved_path):
+            time.sleep(2)
             return "ok", moved_path
 
-        full_output = "\n".join(output_lines).lower()
         if any(phrase in full_output for phrase in ("no results", "failed to find", "not found", "could not")):
+            time.sleep(2)
             return "not_found", None
 
         return "failed", None

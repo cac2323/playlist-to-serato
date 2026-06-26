@@ -18,6 +18,12 @@
       </div>
     </div>
 
+    <!-- Source toggle -->
+    <div class="source-toggle">
+      <button class="source-btn active" id="btn-source-apple">Apple Music</button>
+      <button class="source-btn" id="btn-source-spotify">Spotify</button>
+    </div>
+
     <!-- Playlist field -->
     <div class="field">
       <label for="playlist-input">Playlist</label>
@@ -78,7 +84,11 @@
           </div>
         </div>
         <div class="missing-list" id="missing-list"></div>
-        <button class="btn-download" id="btn-download" hidden></button>
+        <div class="download-row">
+          <button class="btn-download" id="btn-download" hidden></button>
+          <button class="btn-cancel" id="btn-cancel" hidden>Cancel</button>
+        </div>
+        <div class="download-log" id="download-log" hidden></div>
       </div>
 
     </div>
@@ -100,6 +110,10 @@
         <label>Soulseek password</label>
         <input id="s-password" class="input" type="password" placeholder="••••••••">
       </div>
+      <div class="test-conn-row">
+        <button class="text-btn" id="btn-test-conn">Test connection</button>
+        <span class="test-conn-status" id="test-conn-status"></span>
+      </div>
       <div class="field">
         <label>Download folder</label>
         <div class="folder-row">
@@ -110,6 +124,14 @@
 
       <button class="btn-primary" id="btn-save-settings">Save</button>
       <p class="modal-status" id="modal-status"></p>
+
+      <hr class="divider">
+
+      <div class="spotify-auth-row">
+        <button class="text-btn" id="btn-spotify-connect">Connect</button>
+        <button class="text-btn" id="btn-spotify-disconnect">Disconnect</button>
+        <span class="spotify-status" id="spotify-status"></span>
+      </div>
     </div>
   </div>
 
