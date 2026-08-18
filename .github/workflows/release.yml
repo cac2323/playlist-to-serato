@@ -23,27 +23,21 @@ jobs:
           CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
           CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
         run: |
-          KEYCHAIN_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')
           echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
-          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security create-keychain -p "" build.keychain
           security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security list-keychains -s build.keychain
           security default-keychain -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          security unlock-keychain -p "" build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
           rm certificate.p12
-          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Build, sign, notarize
         env:
           TEAM_ID: ${{ secrets.TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-        run: |
-          security list-keychains -s build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          bash build.sh
+        run: bash build.sh
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2

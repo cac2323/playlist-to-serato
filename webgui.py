@@ -7,7 +7,6 @@ from pathlib import Path
 import webview
 
 import apple_music
-import spotify as spotify_mod
 from serato_db import parse_database
 from matcher import build_serato_index, build_serato_title_index, match_tracks
 from serato_crate import write_crate, crate_exists, get_date_crate_name, audio_paths_in_dir
@@ -33,6 +32,7 @@ class Api:
     def get_playlists(self, source='apple_music'):
         try:
             if source == 'spotify':
+                import spotify as spotify_mod
                 return spotify_mod.get_playlists()  # [{'id': ..., 'name': ...}, ...]
             return apple_music.get_playlists()
         except Exception as e:
@@ -59,6 +59,7 @@ class Api:
             self._ensure_index()
 
             if source == 'spotify':
+                import spotify as spotify_mod
                 playlist_tracks = spotify_mod.get_playlist_tracks(playlist_id)
             else:
                 playlist_tracks = apple_music.get_playlist_tracks(playlist)
@@ -220,7 +221,7 @@ class Api:
             'username': username or '',
             'has_password': bool(password),
             'base_dir': str(get_base_dir()),
-            'spotify_connected': spotify_mod.is_authenticated(),
+            'spotify_connected': False,
         }
 
     def save_settings(self, username, password, folder):
@@ -248,6 +249,7 @@ class Api:
 
     def connect_spotify(self):
         try:
+            import spotify as spotify_mod
             spotify_mod.connect()
             return {'ok': True}
         except Exception as e:
@@ -255,6 +257,7 @@ class Api:
 
     def disconnect_spotify(self):
         try:
+            import spotify as spotify_mod
             spotify_mod.disconnect()
             return {'ok': True}
         except Exception as e:

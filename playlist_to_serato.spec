@@ -12,7 +12,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'gui'],
+    excludes=['tkinter', 'gui', 'spotify', 'spotipy'],
     noarchive=False,
 )
 
