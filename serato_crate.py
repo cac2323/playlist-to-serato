@@ -76,9 +76,32 @@ def _encode_track(path: str) -> bytes:
     return _encode_field("otrk", ptrk)
 
 
+def _crate_path(crate_name: str) -> Path:
+    """Return a .crate path that is guaranteed to live in SUBCRATES_DIR."""
+    if not crate_name or not crate_name.strip():
+        raise ValueError("Crate name cannot be empty.")
+    if "\0" in crate_name or "/" in crate_name or "\\" in crate_name:
+        raise ValueError("Crate name cannot contain path separators.")
+    if ".." in crate_name:
+        raise ValueError("Crate name cannot contain '..'.")
+
+    safe_name = Path(crate_name).name
+    if safe_name != crate_name:
+        raise ValueError("Crate name must be a single filename, not a path.")
+
+    crate_path = (SUBCRATES_DIR / f"{safe_name}.crate").resolve()
+    try:
+        crate_path.parent.relative_to(SUBCRATES_DIR.resolve())
+    except ValueError:
+        raise ValueError("Refusing to write crate outside the Serato Subcrates folder.") from None
+    if crate_path.parent != SUBCRATES_DIR.resolve():
+        raise ValueError("Refusing to write crate outside the Serato Subcrates folder.")
+    return crate_path
+
+
 def crate_exists(crate_name: str) -> bool:
     """Check if a crate with this name already exists."""
-    return (SUBCRATES_DIR / f"{crate_name}.crate").exists()
+    return _crate_path(crate_name).exists()
 
 
 def write_crate(crate_name: str, track_paths: list[str], overwrite: bool = False) -> Path:
@@ -96,7 +119,7 @@ def write_crate(crate_name: str, track_paths: list[str], overwrite: bool = False
     Raises:
         FileExistsError: If crate already exists and overwrite=False
     """
-    crate_path = SUBCRATES_DIR / f"{crate_name}.crate"
+    crate_path = _crate_path(crate_name)
 
     if crate_path.exists() and not overwrite:
         raise FileExistsError(f"Crate already exists: {crate_path}")

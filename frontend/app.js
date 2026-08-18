@@ -207,6 +207,10 @@ btnCreate.addEventListener('click', async () => {
 
   // Check for existing crate
   const exists = await window.pywebview.api.check_crate_exists(crate);
+  if (exists && exists.error) {
+    setStatus(exists.error, 'error');
+    return;
+  }
   if (exists) {
     if (!confirm(`A crate named "${crate}" already exists. Overwrite it?`)) return;
   }
@@ -341,9 +345,19 @@ function updateDownloadBtn() {
 }
 
 // ── Downloads ─────────────────────────────────────────────────
+let soulseekWarningAcked = false;
+
 btnDownload.addEventListener('click', async () => {
   const indices = Array.from(state.selectedIndices);
   if (!indices.length) return;
+
+  if (!soulseekWarningAcked) {
+    const ok = confirm(
+      'Soulseek downloads come from other users on a peer-to-peer network. Files are not scanned for malware. Continue?'
+    );
+    if (!ok) return;
+    soulseekWarningAcked = true;
+  }
 
   const result = await window.pywebview.api.start_downloads(indices);
 
@@ -353,6 +367,10 @@ btnDownload.addEventListener('click', async () => {
   }
   if (result.error === 'no_sldl') {
     alert('sldl is not installed.\n\nDownload it from: github.com/fiso64/slsk-batchdl\n\nThen run:\n  sudo codesign --sign - /usr/local/bin/sldl');
+    return;
+  }
+  if (result.error === 'no_tracks') {
+    setStatus('No valid tracks selected.', 'error');
     return;
   }
   if (result.error) {

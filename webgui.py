@@ -49,7 +49,10 @@ class Api:
     # ── Create crate ───────────────────────────────────────────────────────
 
     def check_crate_exists(self, crate_name):
-        return crate_exists(crate_name)
+        try:
+            return crate_exists(crate_name)
+        except ValueError as e:
+            return {'error': str(e)}
 
     def create_crate(self, playlist, crate_name, source='apple_music', playlist_id=None):
         try:
@@ -96,7 +99,19 @@ class Api:
         if not check_sldl_installed():
             return {'error': 'no_sldl'}
 
-        tracks = [self._unmatched[i] for i in indices]
+        n = len(self._unmatched)
+        tracks = []
+        for i in indices:
+            try:
+                idx = int(i)
+            except (TypeError, ValueError):
+                continue
+            if float(i) != idx:
+                continue
+            if 0 <= idx < n:
+                tracks.append((idx, self._unmatched[idx]))
+        if not tracks:
+            return {'error': 'no_tracks'}
         total = len(tracks)
         crate_name = self._crate_name
         matched = list(self._matched)
@@ -127,8 +142,8 @@ class Api:
             cancelled = False
             with ThreadPoolExecutor(max_workers=1) as executor:
                 futures = {
-                    executor.submit(download_one, (i, t)): t
-                    for i, t in enumerate(tracks)
+                    executor.submit(download_one, (idx, t)): t
+                    for idx, t in tracks
                 }
                 for future in as_completed(futures):
                     i, track, status, file_path = future.result()

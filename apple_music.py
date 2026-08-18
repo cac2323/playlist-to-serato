@@ -10,10 +10,11 @@ _SKIP_PLAYLISTS = {
 }
 
 
-def _run_applescript(script: str) -> str:
-    """Run an AppleScript string and return stdout."""
+def _run_applescript(script: str, *args: str) -> str:
+    """Run an AppleScript string, optionally passing argv (never interpolated)."""
     result = subprocess.run(
-        ["osascript", "-e", script],
+        ["osascript", "-", *args],
+        input=script,
         capture_output=True,
         text=True,
     )
@@ -45,19 +46,20 @@ def get_playlist_tracks(playlist_name: str) -> list[dict]:
     Uses a tab delimiter between fields and newline between tracks to avoid
     ambiguity with commas in song/artist names.
     """
-    # Escape any quotes in the playlist name
-    safe_name = playlist_name.replace('"', '\\"')
-    script = f"""
-tell application "Music"
-    set output to ""
-    set t to tracks of playlist "{safe_name}"
-    repeat with tr in t
-        set output to output & (name of tr) & tab & (artist of tr) & linefeed
-    end repeat
-    return output
-end tell
+    script = """
+on run argv
+    set playlistName to item 1 of argv
+    tell application "Music"
+        set output to ""
+        set t to tracks of playlist playlistName
+        repeat with tr in t
+            set output to output & (name of tr) & tab & (artist of tr) & linefeed
+        end repeat
+        return output
+    end tell
+end run
 """
-    raw = _run_applescript(script)
+    raw = _run_applescript(script, playlist_name)
     tracks = []
     for line in raw.splitlines():
         if "\t" in line:

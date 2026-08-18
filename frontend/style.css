@@ -81,6 +81,7 @@ body {
   gap: 6px;
   margin-bottom: 14px;
 }
+.source-toggle[hidden] { display: none; }
 
 .source-btn {
   background: var(--surface);
@@ -562,6 +563,7 @@ body {
   gap: 8px;
   margin-top: 8px;
 }
+.spotify-auth-row[hidden] { display: none; }
 
 .spotify-status {
   font-size: 11px;

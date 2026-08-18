@@ -54,6 +54,10 @@ xcrun notarytool submit "$ZIP" \
 echo "→ Stapling notarization ticket…"
 xcrun stapler staple "$APP"
 
+echo "→ Re-zipping stapled app…"
+rm -f "$ZIP"
+ditto -c -k --keepParent "$APP" "$ZIP"
+
 echo ""
 echo "✓ Done: $APP"
 echo "  Upload $ZIP to GitHub Releases."

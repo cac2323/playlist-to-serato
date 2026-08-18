@@ -10,7 +10,7 @@ Convert an Apple Music playlist into a Serato DJ Pro crate — and download any 
 
 1. **Serato DJ Pro** — install it and open it at least once so the library database is created.
 2. **sldl** *(only needed if you want to download missing tracks)*
-   - Download the latest macOS arm64 binary from [github.com/fiso64/slsk-batchdl/releases](https://github.com/fiso64/slsk-batchdl/releases)
+   - This app does not include `sldl`. Download it yourself from the upstream [releases](https://github.com/fiso64/slsk-batchdl/releases) and treat that file as untrusted until you are satisfied with the source.
    - Open Terminal and run:
      ```
      sudo mv ~/Downloads/sldl /usr/local/bin/
@@ -19,19 +19,24 @@ Convert an Apple Music playlist into a Serato DJ Pro crate — and download any 
 
 ### Installation
 
-1. Download `Playlist.to.Serato.zip` from the [Releases](../../releases) page
+1. Download `Playlist.to.Serato.zip` from **this project's** [Releases](../../releases) page — not a copy hosted elsewhere
 2. Unzip and drag **Playlist to Serato.app** to your Applications folder
-3. Double-click to open — no security warnings
+3. Optional: confirm the app is signed by the developer you expect:
+   ```
+   codesign -dv --verbose=4 "/Applications/Playlist to Serato.app"
+   ```
+4. Double-click to open. A stapled, notarized build should not show a Gatekeeper warning.
 
 ### First run
 
 1. Open the app
-2. Click **⚙** (settings) and enter your Soulseek username and password, and choose a download folder
-3. Select a playlist from the dropdown
-4. Enter a name for the Serato crate
-5. Click **Create Crate**
-6. If any tracks are missing from your Serato library, select them and click **Download via Soulseek**
-7. Reopen Serato DJ Pro to see the new crate
+2. Select a playlist from the dropdown
+3. Enter a name for the Serato crate
+4. Click **Create Crate**
+5. *(Optional)* To download missing tracks: click **⚙**, enter Soulseek credentials, choose a download folder, then select tracks and **Download via Soulseek**
+6. Reopen Serato DJ Pro to see the new crate
+
+Soulseek is optional. Files come from other people on a peer-to-peer network; this app does not scan them. You are responsible for what you download. `sldl` is a **separate** program you install yourself — this app does not ship, sign, or verify that binary.
 
 ---
 
@@ -87,10 +92,13 @@ The signed and notarized app will be at `dist/Playlist to Serato.app` and the zi
 ## FAQ
 
 **Why does sldl need to be codesigned?**
-macOS Gatekeeper blocks unsigned binaries downloaded from the internet. The `codesign --sign -` command applies an ad-hoc signature that satisfies Gatekeeper without needing a paid developer certificate.
+macOS Gatekeeper blocks unsigned binaries downloaded from the internet. The `codesign --sign -` command applies an ad-hoc signature that satisfies Gatekeeper without needing a paid developer certificate. You are trusting that `sldl` binary independently of this app.
 
 **Where are my Soulseek credentials stored?**
-In the macOS Keychain — never in plain text on disk.
+The password is stored in the macOS Keychain. The username and download-folder path are in `~/.playlist-to-serato.json` (mode 600). While a download runs, a temporary 600 config file is written for `sldl` so the password is not visible in the process list; it is deleted when the process exits.
+
+**Are Soulseek downloads safe?**
+No guarantee. They are unverified peer-to-peer files. Use the feature only if you accept that risk. Copyright compliance is your responsibility.
 
 **Which playlists appear in the dropdown?**
 All playlists in your Apple Music library (read via AppleScript).

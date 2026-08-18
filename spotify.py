@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 import spotipy
 from spotipy.oauth2 import SpotifyPKCE
@@ -9,6 +10,14 @@ SCOPE = 'playlist-read-private playlist-read-collaborative'
 CACHE_PATH = Path.home() / '.playlist-to-serato-spotify-cache'
 
 
+def _lock_cache() -> None:
+    try:
+        if CACHE_PATH.exists():
+            os.chmod(CACHE_PATH, 0o600)
+    except OSError:
+        pass
+
+
 def _get_sp(client_id: str = CLIENT_ID) -> spotipy.Spotify:
     auth = SpotifyPKCE(
         client_id=client_id,
@@ -17,7 +26,9 @@ def _get_sp(client_id: str = CLIENT_ID) -> spotipy.Spotify:
         cache_path=str(CACHE_PATH),
         open_browser=True,
     )
-    return spotipy.Spotify(auth_manager=auth)
+    sp = spotipy.Spotify(auth_manager=auth)
+    _lock_cache()
+    return sp
 
 
 def is_authenticated() -> bool:
@@ -31,6 +42,7 @@ def is_authenticated() -> bool:
             open_browser=False,
         )
         token = auth.get_cached_token()
+        _lock_cache()
         return token is not None and not auth.is_token_expired(token)
     except Exception:
         return False
@@ -39,6 +51,7 @@ def is_authenticated() -> bool:
 def connect() -> None:
     """Trigger the OAuth browser flow. Blocks until authenticated."""
     _get_sp()
+    _lock_cache()
 
 
 def disconnect() -> None:

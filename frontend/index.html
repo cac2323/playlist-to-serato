@@ -18,8 +18,8 @@
       </div>
     </div>
 
-    <!-- Source toggle -->
-    <div class="source-toggle">
+    <!-- Source toggle (Spotify hidden until BYO Client ID ships) -->
+    <div class="source-toggle" hidden>
       <button class="source-btn active" id="btn-source-apple">Apple Music</button>
       <button class="source-btn" id="btn-source-spotify">Spotify</button>
     </div>
@@ -125,9 +125,9 @@
       <button class="btn-primary" id="btn-save-settings">Save</button>
       <p class="modal-status" id="modal-status"></p>
 
-      <hr class="divider">
+      <hr class="divider" hidden>
 
-      <div class="spotify-auth-row">
+      <div class="spotify-auth-row" hidden>
         <button class="text-btn" id="btn-spotify-connect">Connect</button>
         <button class="text-btn" id="btn-spotify-disconnect">Disconnect</button>
         <span class="spotify-status" id="spotify-status"></span>
