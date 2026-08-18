@@ -1,0 +1,4 @@
+[tool.ruff.lint]
+# Match Ruff's historical default (pycodestyle subset + Pyflakes).
+# Newer Ruff enables isort, bandit, etc. by default and fails this repo.
+select = ["E4", "E7", "E9", "F"]
