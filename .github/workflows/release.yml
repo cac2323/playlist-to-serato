@@ -12,9 +12,9 @@ jobs:
   build:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
@@ -32,12 +32,20 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
           rm certificate.p12
 
-      - name: Build, sign, notarize
+      - name: Install Python dependencies
+        run: python3 -m pip install -r requirements.txt
+
+      - name: Build app bundle
+        run: python3 -m PyInstaller playlist_to_serato.spec --noconfirm
+
+      - name: Sign, notarize, staple
         env:
           TEAM_ID: ${{ secrets.TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-        run: bash build.sh
+        run: |
+          security unlock-keychain -p "" build.keychain
+          SKIP_PYINSTALLER=1 bash build.sh
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2

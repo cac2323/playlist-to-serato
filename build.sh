@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 APP="dist/Playlist to Serato.app"
 ZIP="dist/Playlist.to.Serato.zip"
@@ -8,35 +8,61 @@ TEAM_ID="${TEAM_ID:?Set TEAM_ID env var (e.g. export TEAM_ID=ABC123XYZ)}"
 APPLE_ID="${APPLE_ID:?Set APPLE_ID env var (e.g. export APPLE_ID=you@example.com)}"
 APP_PASSWORD="${APP_PASSWORD:?Set APP_PASSWORD env var (app-specific password from appleid.apple.com)}"
 
+PYTHON="${PYTHON:-python3}"
+
 echo "→ Runner"
 sw_vers
-python --version || python3 --version
+"$PYTHON" --version
+"$PYTHON" -m pip --version
+
+echo "→ Code signing identities (no secrets):"
+security find-identity -v -p codesigning || true
 
 # Resolve full certificate identity from keychain
-SIGN_ID=$(security find-identity -v -p codesigning | grep "Developer ID Application" | grep "$TEAM_ID" | head -1 | sed 's/.*"\(.*\)"/\1/')
+SIGN_ID=$(security find-identity -v -p codesigning \
+  | grep "Developer ID Application" \
+  | grep "$TEAM_ID" \
+  | head -1 \
+  | sed 's/.*"\(.*\)"/\1/' || true)
 if [ -z "$SIGN_ID" ]; then
   echo "✗ No 'Developer ID Application' certificate found for team $TEAM_ID"
-  echo "  Run: security find-identity -v -p codesigning"
-  security find-identity -v -p codesigning || true
   exit 1
 fi
 echo "→ Using identity: $SIGN_ID"
 
-echo "→ Installing dependencies…"
-pip install -r requirements.txt
+sign_macho() {
+  local f="$1"
+  if file "$f" | grep -q "Mach-O"; then
+    echo "  codesign $f"
+    codesign --sign "$SIGN_ID" --force --timestamp --options runtime "$f"
+  fi
+}
 
-echo "→ Building app bundle…"
-pyinstaller playlist_to_serato.spec --noconfirm
+if [ "${SKIP_PYINSTALLER:-}" != "1" ]; then
+  echo "→ Installing dependencies…"
+  "$PYTHON" -m pip install -r requirements.txt
+
+  echo "→ Building app bundle…"
+  "$PYTHON" -m PyInstaller playlist_to_serato.spec --noconfirm
+else
+  echo "→ Skipping pip / PyInstaller (SKIP_PYINSTALLER=1)"
+fi
+
+if [ ! -d "$APP" ]; then
+  echo "✗ App bundle missing: $APP"
+  exit 1
+fi
 
 echo "→ Signing…"
-# Sign all loose binaries and dylibs inside the bundle first
-find "$APP" -type f \( -name "*.dylib" -o -name "*.so" \) | while read f; do
-  codesign --sign "$SIGN_ID" --force --timestamp --options runtime "$f"
-done
-find "$APP" -type f -perm +111 ! -name "*.py" | while read f; do
-  file "$f" | grep -q "Mach-O" && codesign --sign "$SIGN_ID" --force --timestamp --options runtime "$f"
-done
-# Sign the bundle itself
+while IFS= read -r -d '' f; do
+  sign_macho "$f"
+done < <(find "$APP" -type f \( -name "*.dylib" -o -name "*.so" \) -print0)
+
+while IFS= read -r -d '' f; do
+  sign_macho "$f"
+done < <(find "$APP" -type f -print0)
+
+echo "→ Signing bundle…"
 codesign --sign "$SIGN_ID" \
   --force --timestamp --options runtime \
   --entitlements entitlements.plist \
