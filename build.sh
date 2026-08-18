@@ -10,7 +10,8 @@ APP_PASSWORD="${APP_PASSWORD:?Set APP_PASSWORD env var (app-specific password fr
 
 echo "→ Runner"
 sw_vers
-python3 --version
+if command -v python >/dev/null 2>&1; then PY=python; else PY=python3; fi
+echo "→ Python: $($PY --version) ($PY)"
 
 echo "→ Code signing identities"
 security find-identity -v -p codesigning || true
@@ -32,10 +33,16 @@ fi
 echo "→ Using identity: $SIGN_ID"
 
 echo "→ Installing dependencies…"
-python3 -m pip install -r requirements.txt
+"$PY" -m pip install -r requirements.txt
 
 echo "→ Building app bundle…"
-python3 -m PyInstaller playlist_to_serato.spec --noconfirm
+"$PY" -m PyInstaller playlist_to_serato.spec --noconfirm
+
+if [ -n "${KEYCHAIN_PASSWORD:-}" ]; then
+  echo "→ Unlocking signing keychain…"
+  security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+  security default-keychain -s build.keychain
+fi
 
 echo "→ Signing nested Mach-O files…"
 while IFS= read -r -d '' f; do
