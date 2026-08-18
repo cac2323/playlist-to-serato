@@ -278,6 +278,14 @@ class Api:
 
 
 def start():
+    # #region agent log
+    try:
+        import json as _json, time as _time
+        with open("/Users/canyon/Documents/Projects/playlist-to-serato/.cursor/debug-5a17ba.log", "a") as _f:
+            _f.write(_json.dumps({"sessionId": "5a17ba", "runId": "post-fix", "hypothesisId": "B", "location": "webgui.py:start", "message": "app start", "data": {"frozen": bool(getattr(sys, "frozen", False))}, "timestamp": int(_time.time() * 1000)}) + "\n")
+    except Exception:
+        pass
+    # #endregion
     api = Api()
     base = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).parent
     window = webview.create_window(

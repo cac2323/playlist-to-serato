@@ -13,6 +13,7 @@ import keyring
 
 _KEYRING_SERVICE = "playlist-to-serato"
 _RUNTIME_DIR = Path.home() / ".playlist-to-serato"
+_PASSWORD_FALLBACK = _RUNTIME_DIR / "soulseek.pass"
 
 
 def _free_port() -> int:
@@ -69,17 +70,66 @@ def save_config(data: dict):
     os.chmod(CONFIG_PATH, 0o600)
 
 
+def _write_password_fallback(password: str) -> None:
+    _RUNTIME_DIR.mkdir(mode=0o700, exist_ok=True)
+    try:
+        os.chmod(_RUNTIME_DIR, 0o700)
+    except OSError:
+        pass
+    fd = os.open(_PASSWORD_FALLBACK, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(password)
+    os.chmod(_PASSWORD_FALLBACK, 0o600)
+
+
+def _read_password_fallback() -> str | None:
+    try:
+        if _PASSWORD_FALLBACK.exists():
+            text = _PASSWORD_FALLBACK.read_text()
+            return text if text else None
+    except OSError:
+        return None
+    return None
+
+
 def get_credentials() -> tuple[str | None, str | None]:
     cfg = load_config()
     username = cfg.get("soulseek_username")
     if not username:
         return None, None
-    password = keyring.get_password(_KEYRING_SERVICE, username)
+    password = None
+    try:
+        password = keyring.get_password(_KEYRING_SERVICE, username)
+    except Exception:
+        password = None
+    if not password:
+        password = _read_password_fallback()
     return username, password
 
 
 def save_credentials(username: str, password: str):
-    keyring.set_password(_KEYRING_SERVICE, username, password)
+    try:
+        keyring.set_password(_KEYRING_SERVICE, username, password)
+        # #region agent log
+        try:
+            with open("/Users/canyon/Documents/Projects/playlist-to-serato/.cursor/debug-5a17ba.log", "a") as _f:
+                _f.write(json.dumps({"sessionId": "5a17ba", "runId": "post-fix", "hypothesisId": "B", "location": "downloader.py:save_credentials", "message": "keyring ok", "data": {"used_fallback": False}, "timestamp": int(time.time() * 1000)}) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        try:
+            _PASSWORD_FALLBACK.unlink(missing_ok=True)
+        except OSError:
+            pass
+    except Exception as e:
+        # #region agent log
+        try:
+            with open("/Users/canyon/Documents/Projects/playlist-to-serato/.cursor/debug-5a17ba.log", "a") as _f:
+                _f.write(json.dumps({"sessionId": "5a17ba", "runId": "post-fix", "hypothesisId": "B", "location": "downloader.py:save_credentials", "message": "keyring failed using fallback", "data": {"used_fallback": True, "exc_type": type(e).__name__, "exc_msg": str(e)}, "timestamp": int(time.time() * 1000)}) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        _write_password_fallback(password)
     save_config({"soulseek_username": username})
 
 

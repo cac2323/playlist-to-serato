@@ -6,11 +6,5 @@
   <true/>
   <key>com.apple.security.automation.apple-events</key>
   <true/>
-  <key>com.apple.application-identifier</key>
-  <string>R7ST93WAGC.com.playlisttoserato.app</string>
-  <key>keychain-access-groups</key>
-  <array>
-    <string>R7ST93WAGC.com.playlisttoserato.app</string>
-  </array>
 </dict>
 </plist>

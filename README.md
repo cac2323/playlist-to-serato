@@ -96,7 +96,7 @@ The signed and notarized app will be at `dist/Playlist to Serato.app` and the zi
 macOS Gatekeeper blocks unsigned binaries downloaded from the internet. The `codesign --sign -` command applies an ad-hoc signature that satisfies Gatekeeper without needing a paid developer certificate. You are trusting that `sldl` binary independently of this app.
 
 **Where are my Soulseek credentials stored?**
-The password is stored in the macOS Keychain. The username and download-folder path are in `~/.playlist-to-serato.json` (mode 600). While a download runs, a temporary 600 config file is written for `sldl` so the password is not visible in the process list; it is deleted when the process exits.
+The password is stored in the macOS Keychain when the OS allows it. If Keychain rejects the signed app, the password is written to `~/.playlist-to-serato/soulseek.pass` (mode 600) instead of failing the save. The username and download-folder path are in `~/.playlist-to-serato.json` (mode 600). While a download runs, a temporary 600 config file is written for `sldl` so the password is not visible in the process list; it is deleted when the process exits.
 
 **Are Soulseek downloads safe?**
 No guarantee. They are unverified peer-to-peer files. Use the feature only if you accept that risk. Copyright compliance is your responsibility.
