@@ -99,16 +99,39 @@ _LOGIN_ERROR_PATTERNS = (
 )
 
 
+def _sldl_bin() -> str | None:
+    """Return an executable sldl path, including Finder-launched .app PATH gaps."""
+    candidates = [Path("/usr/local/bin/sldl"), Path("/opt/homebrew/bin/sldl")]
+    which = shutil.which("sldl")
+    if which:
+        candidates.append(Path(which))
+    seen: set[Path] = set()
+    for path in candidates:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if resolved.is_file() and os.access(resolved, os.X_OK):
+            return str(resolved)
+    return None
+
+
 def check_sldl_installed() -> bool:
-    """Return True if sldl is available on PATH."""
+    """Return True if sldl is on PATH or in a known install location."""
+    binary = _sldl_bin()
+    if not binary:
+        return False
     try:
         result = subprocess.run(
-            ["sldl", "--help"],
+            [binary, "--help"],
             capture_output=True,
             timeout=5,
         )
         return result.returncode == 0 or b"sldl" in result.stdout.lower() + result.stderr.lower()
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return False
 
 
@@ -165,9 +188,12 @@ def test_connection(username: str, password: str) -> str:
     Returns 'ok', 'login_error', or 'failed'.
     """
     try:
+        binary = _sldl_bin()
+        if not binary:
+            return "failed"
         with _sldl_config_file(username, password) as conf:
             cmd = [
-                "sldl", "connection_test_ping_xyzzy",
+                binary, "connection_test_ping_xyzzy",
                 "--config", str(conf),
                 "--search-timeout", "5000",
                 "--listen-port", str(_free_port()),
@@ -229,9 +255,13 @@ def download_track(
 
         query = f"{artist} - {title}" if artist else title
 
+        binary = _sldl_bin()
+        if not binary:
+            return "failed", None
+
         with _sldl_config_file(username, password) as conf:
             cmd = [
-                "sldl", query,
+                binary, query,
                 "--config", str(conf),
                 "--path", str(target_dir),
                 "--format", "flac,mp3,m4a,aiff,wav,ogg,opus",

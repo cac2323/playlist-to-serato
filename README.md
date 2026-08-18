@@ -16,6 +16,7 @@ Convert an Apple Music playlist into a Serato DJ Pro crate — and download any 
      sudo mv ~/Downloads/sldl /usr/local/bin/
      sudo codesign --sign - /usr/local/bin/sldl
      ```
+   - The signed app looks for `/usr/local/bin/sldl` and `/opt/homebrew/bin/sldl` even when launched from Finder (those folders are often missing from a double-clicked app's PATH).
 
 ### Installation
 
