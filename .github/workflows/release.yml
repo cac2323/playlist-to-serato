@@ -85,6 +85,12 @@ jobs:
           APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
         run: |
           sudo xcode-select -s /Applications/Xcode_16.4.app
+          APPLE_ID="${APPLE_ID//$'\r'/}"
+          APPLE_ID="${APPLE_ID//$'\n'/}"
+          APP_PASSWORD="${APP_PASSWORD//$'\r'/}"
+          APP_PASSWORD="${APP_PASSWORD//$'\n'/}"
+          TEAM_ID="${TEAM_ID//$'\r'/}"
+          TEAM_ID="${TEAM_ID//$'\n'/}"
           set +e
           OUT=$(xcrun notarytool submit dist/Playlist.to.Serato.zip \
             --apple-id "$APPLE_ID" \
@@ -98,8 +104,10 @@ jobs:
           SAFE="${SAFE//$APP_PASSWORD/[APP_PASSWORD]}"
           SAFE="${SAFE//$TEAM_ID/[TEAM_ID]}"
           echo "$SAFE"
+          B64=$(printf '%s' "$SAFE" | base64 | tr -d '\n')
+          echo "notarytool_b64=$B64"
           if [ "$STATUS" -ne 0 ]; then
-            echo "::error::notarytool exit $STATUS :: $SAFE"
+            echo "::error::notarytool exit $STATUS b64=$B64"
             exit 1
           fi
 
