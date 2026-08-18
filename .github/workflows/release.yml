@@ -84,12 +84,24 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
         run: |
-          xcrun --find notarytool
-          xcrun notarytool submit dist/Playlist.to.Serato.zip \
+          sudo xcode-select -s /Applications/Xcode_16.4.app
+          set +e
+          OUT=$(xcrun notarytool submit dist/Playlist.to.Serato.zip \
             --apple-id "$APPLE_ID" \
             --password "$APP_PASSWORD" \
             --team-id "$TEAM_ID" \
-            --wait
+            --wait 2>&1)
+          STATUS=$?
+          set -e
+          SAFE="$OUT"
+          SAFE="${SAFE//$APPLE_ID/[APPLE_ID]}"
+          SAFE="${SAFE//$APP_PASSWORD/[APP_PASSWORD]}"
+          SAFE="${SAFE//$TEAM_ID/[TEAM_ID]}"
+          echo "$SAFE"
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::error::notarytool exit $STATUS :: $SAFE"
+            exit 1
+          fi
 
       - name: Staple and re-zip
         run: |
