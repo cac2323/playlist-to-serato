@@ -51,14 +51,51 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           SKIP_PYINSTALLER=1 SKIP_NOTARIZE=1 bash build.sh
 
-      - name: Notarize and staple
+      - name: Check notarize secrets
         env:
           TEAM_ID: ${{ secrets.TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
         run: |
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          SKIP_PYINSTALLER=1 SKIP_SIGN=1 bash build.sh
+          echo "APPLE_ID length=${#APPLE_ID}"
+          echo "TEAM_ID length=${#TEAM_ID}"
+          echo "APP_PASSWORD length=${#APP_PASSWORD}"
+          test -n "$APPLE_ID"
+          test -n "$TEAM_ID"
+          test -n "$APP_PASSWORD"
+
+      - name: Restore login keychain for notarytool
+        run: |
+          LOGIN="$HOME/Library/Keychains/login.keychain-db"
+          security default-keychain -d user -s "$LOGIN" || true
+          if [ -n "${KEYCHAIN_PATH:-}" ] && [ -f "$LOGIN" ]; then
+            security list-keychains -d user -s "$KEYCHAIN_PATH" "$LOGIN"
+          fi
+
+      - name: Zip for notarization
+        run: |
+          rm -f dist/Playlist.to.Serato.zip
+          ditto -c -k --keepParent "dist/Playlist to Serato.app" dist/Playlist.to.Serato.zip
+          ls -lh dist/Playlist.to.Serato.zip
+
+      - name: Submit to Apple notary
+        env:
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        run: |
+          xcrun --find notarytool
+          xcrun notarytool submit dist/Playlist.to.Serato.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APP_PASSWORD" \
+            --team-id "$TEAM_ID" \
+            --wait
+
+      - name: Staple and re-zip
+        run: |
+          xcrun stapler staple "dist/Playlist to Serato.app"
+          rm -f dist/Playlist.to.Serato.zip
+          ditto -c -k --keepParent "dist/Playlist to Serato.app" dist/Playlist.to.Serato.zip
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
