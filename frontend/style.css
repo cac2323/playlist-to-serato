@@ -315,6 +315,7 @@ body {
   display: flex;
   gap: 10px;
 }
+.toggle-btns[hidden] { display: none; }
 
 .text-btn {
   background: var(--surface);
@@ -440,6 +441,36 @@ body {
 
 /* add margin-top back to the row itself */
 .missing-section .download-row { margin-top: 10px; }
+
+.sldl-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+}
+
+.download-summary {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  background: #141414;
+}
+.download-summary.ok {
+  border-color: rgba(61, 220, 132, 0.35);
+  color: var(--green);
+  background: rgba(61, 220, 132, 0.08);
+}
+.download-summary.error {
+  border-color: rgba(255, 107, 53, 0.4);
+  color: var(--orange);
+  background: rgba(255, 107, 53, 0.08);
+}
 
 /* ── Download log ── */
 .download-log {

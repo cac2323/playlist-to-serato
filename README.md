@@ -26,16 +26,19 @@ Convert an Apple Music playlist into a Serato DJ Pro crate — and download any 
    ```
    codesign -dv --verbose=4 "/Applications/Playlist to Serato.app"
    ```
-4. Double-click to open. A stapled, notarized build should not show a Gatekeeper warning.
+4. Double-click to open. A stapled, notarized build should not show a Gatekeeper warning. If macOS creates **Playlist to Serato 2**, delete the extra copy and keep a single app named **Playlist to Serato**.
 
 ### First run
 
 1. Open the app
 2. Select a playlist from the dropdown
 3. Enter a name for the Serato crate
-4. Click **Create Crate**
-5. *(Optional)* To download missing tracks: click **⚙**, enter Soulseek credentials, choose a download folder, then select tracks and **Download via Soulseek**
-6. Reopen Serato DJ Pro to see the new crate
+4. Click **Create Crate** — the crate is written even if some tracks are missing from Serato
+5. *(Optional)* Download missing tracks via Soulseek:
+   - Install `sldl` first (see Prerequisites). Until it is installed, the missing list is visible but there is **no download button**
+   - Click **⚙**, enter Soulseek credentials, choose a download folder, Save
+   - Select missing tracks and **Download via Soulseek**. When the run finishes, a summary stays on screen (saved vs not found). Reopen Serato DJ Pro to see the crate
+6. If you skipped Soulseek, reopen Serato DJ Pro to see the crate from step 4
 
 Soulseek is optional. Files come from other people on a peer-to-peer network; this app does not scan them. You are responsible for what you download. `sldl` is a **separate** program you install yourself — this app does not ship, sign, or verify that binary.
 
@@ -105,4 +108,10 @@ No guarantee. They are unverified peer-to-peer files. Use the feature only if yo
 All playlists in your Apple Music library (read via AppleScript).
 
 **The crate doesn't appear in Serato.**
-Serato reads crates on launch. Quit and reopen Serato DJ Pro after creating a crate.
+Serato reads crates on launch. Quit and reopen Serato DJ Pro after creating a crate, and again after a Soulseek download finishes.
+
+**I don't see Download via Soulseek.**
+The app hides that button until it finds `sldl` in `/usr/local/bin`, `/opt/homebrew/bin`, or your PATH. Install `sldl` as in Prerequisites, then reopen the app (or Save in Settings). Creating a crate never requires Soulseek.
+
+**The app won't open after I drag a new zip into Applications.**
+Use one copy named **Playlist to Serato.app**. A Finder duplicate (**Playlist to Serato 2**) is easy to mix up with an older build. Download the latest zip from this repo's Releases page, delete extra copies, and replace the app in Applications.

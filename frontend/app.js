@@ -13,6 +13,7 @@ const state = {
   downloading: false,
   notFoundTracks: [],      // tracks searched but not on Soulseek
   errorTracks: [],         // tracks that failed due to connection/timeout
+  sldlInstalled: false,
 };
 
 // ── DOM refs ─────────────────────────────────────────────────
@@ -35,6 +36,9 @@ const missingListEl    = $('missing-list');
 const btnDownload      = $('btn-download');
 const btnCancel        = $('btn-cancel');
 const downloadLogEl    = $('download-log');
+const downloadSummaryEl = $('download-summary');
+const sldlHintEl       = $('sldl-hint');
+const missingTogglesEl = $('missing-toggles');
 const btnSelectAll     = $('btn-select-all');
 const btnSelectNone    = $('btn-select-none');
 const btnSourceApple   = $('btn-source-apple');
@@ -57,11 +61,21 @@ const testConnStatusEl   = $('test-conn-status');
 
 // ── Boot ─────────────────────────────────────────────────────
 window.addEventListener('pywebviewready', () => {
-  loadPlaylists();
+  refreshSldlFlag().then(loadPlaylists);
 });
 
 // fallback if pywebviewready already fired
-if (window.pywebview) loadPlaylists();
+if (window.pywebview) {
+  refreshSldlFlag().then(loadPlaylists);
+}
+
+function refreshSldlFlag() {
+  if (!window.pywebview || !window.pywebview.api) return Promise.resolve();
+  return window.pywebview.api.get_settings().then(s => {
+    state.sldlInstalled = !!(s && s.sldl_installed);
+    updateDownloadBtn();
+  }).catch(() => {});
+}
 
 function loadPlaylists() {
   setStatus('Loading playlists…');
@@ -331,16 +345,41 @@ btnSelectNone.addEventListener('click', () => {
   updateDownloadBtn();
 });
 
+function remainingDownloadIndices() {
+  return state.unmatched
+    .map((_, i) => i)
+    .filter(i => {
+      const item = missingListEl.querySelector(`[data-index="${i}"]`);
+      return item && !item.classList.contains('dl-ok');
+    });
+}
+
 function updateDownloadBtn() {
+  const hasMissing = state.unmatched.length > 0 && missingSec && !missingSec.hidden;
+  if (sldlHintEl) sldlHintEl.hidden = !hasMissing || state.sldlInstalled || state.downloading;
+  if (missingTogglesEl) missingTogglesEl.hidden = !state.sldlInstalled;
+
+  if (!state.sldlInstalled) {
+    btnDownload.hidden = true;
+    return;
+  }
+
   const n = state.selectedIndices.size;
   const total = state.unmatched.length;
   if (n === 0) {
     btnDownload.hidden = true;
   } else {
     btnDownload.hidden = false;
-    btnDownload.textContent = n === total
-      ? `Download ${n} missing via Soulseek`
-      : `Download ${n} of ${total} missing via Soulseek`;
+    const remaining = remainingDownloadIndices().length;
+    if (remaining < total && remaining > 0 && n === remaining) {
+      btnDownload.textContent = remaining === 1
+        ? 'Download 1 remaining via Soulseek'
+        : `Download ${remaining} remaining via Soulseek`;
+    } else {
+      btnDownload.textContent = n === total
+        ? `Download ${n} missing via Soulseek`
+        : `Download ${n} of ${total} missing via Soulseek`;
+    }
   }
 }
 
@@ -381,6 +420,11 @@ btnDownload.addEventListener('click', async () => {
   state.downloading = true;
   state.notFoundTracks = [];
   state.errorTracks = [];
+  if (downloadSummaryEl) {
+    downloadSummaryEl.hidden = true;
+    downloadSummaryEl.textContent = '';
+    downloadSummaryEl.className = 'download-summary';
+  }
   btnDownload.hidden = true;
   btnCancel.hidden = false;
   btnCreate.disabled = true;
@@ -445,22 +489,48 @@ window._onDownloadsComplete = function({ ok, fail, errors }) {
   btnCancel.hidden = true;
   btnCancel.disabled = false;
   btnCancel.textContent = 'Cancel';
-  btnDownload.hidden = false;
   btnDownload.disabled = false;
   btnCreate.disabled = false;
 
   const loginErr = errors.find(e => e.toLowerCase().includes('login failed'));
   const wasCancelled = errors.includes('cancelled');
+  let tone = '';
+  let msg;
   if (loginErr) {
-    setStatus(loginErr, 'error');
+    msg = loginErr;
+    tone = 'error';
   } else if (wasCancelled) {
-    setStatus(ok > 0 ? `Cancelled — ${ok} downloaded before stop.` : 'Downloads cancelled.', ok > 0 ? 'ok' : '');
+    msg = ok > 0 ? `Cancelled — ${ok} downloaded before stop.` : 'Downloads cancelled.';
+    tone = ok > 0 ? 'ok' : '';
+  } else if (ok > 0 && fail === 0) {
+    msg = `${ok} track${ok === 1 ? '' : 's'} saved via Soulseek. Reopen Serato DJ Pro to see the crate.`;
+    tone = 'ok';
+  } else if (ok > 0) {
+    msg = `Soulseek finished — ${ok} saved, ${fail} not found. Reopen Serato DJ Pro.`;
+    tone = 'ok';
   } else {
-    let msg = `Done — ${ok} downloaded`;
-    if (fail > 0) msg += `, ${fail} not found`;
-    if (ok > 0)   msg += '. Reopen Serato to see changes.';
-    setStatus(msg, ok > 0 ? 'ok' : '');
+    msg = fail > 0
+      ? `Soulseek finished — none saved, ${fail} not found.`
+      : 'Soulseek finished — nothing downloaded.';
+    tone = fail > 0 ? 'error' : '';
   }
+  setStatus(msg, tone);
+  if (downloadSummaryEl) {
+    downloadSummaryEl.hidden = false;
+    downloadSummaryEl.textContent = msg;
+    downloadSummaryEl.className = 'download-summary' + (tone === 'ok' ? ' ok' : tone === 'error' ? ' error' : '');
+  }
+
+  const remaining = remainingDownloadIndices();
+  state.selectedIndices = new Set(remaining);
+  remaining.forEach(i => {
+    const item = missingListEl.querySelector(`[data-index="${i}"]`);
+    if (!item) return;
+    item.classList.add('selected');
+    const box = item.querySelector('.checkbox');
+    if (box) box.textContent = '✓';
+  });
+  updateDownloadBtn();
 
   // Append not-found / error summary to the log panel
   if (state.notFoundTracks.length || state.errorTracks.length) {
@@ -502,9 +572,6 @@ window._onDownloadsComplete = function({ ok, fail, errors }) {
   if (nonLoginErrors.length) {
     console.error('Crate errors:', nonLoginErrors);
   }
-
-  // Update download button label
-  btnDownload.textContent = 'Re-download missing songs';
 };
 
 // ── Settings modal ────────────────────────────────────────────
@@ -515,6 +582,8 @@ function openSettings(onSaveCallback) {
     sPassword.placeholder = s.has_password ? '(saved)' : 'password';
     sFolder.value   = s.base_dir || '';
     updateSpotifyStatus(s.spotify_connected);
+    state.sldlInstalled = !!(s && s.sldl_installed);
+    updateDownloadBtn();
   });
   modalStatus.textContent = '';
   modalStatus.className = 'modal-status';
@@ -565,6 +634,7 @@ btnSave.addEventListener('click', async () => {
 
   modalStatus.textContent = 'Saved.';
   modalStatus.className = 'modal-status ok';
+  refreshSldlFlag();
   setTimeout(() => {
     modalOverlay.hidden = true;
     if (btnSave._callback) btnSave._callback();
